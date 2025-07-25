@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() => runApp(MyApp());
 
@@ -22,6 +23,7 @@ class WebViewPage extends StatefulWidget {
 class _WebViewPageState extends State<WebViewPage> {
   late final WebViewController _controller;
   bool isLoading = true;
+  bool hasConnection = true;
   int _currentIndex = 0;
 
   final List<String> _urls = [
@@ -39,49 +41,81 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (url) {
-            setState(() {
-              isLoading = false;
-            });
-          },
+          onPageStarted: (_) => setState(() => isLoading = true),
+          onPageFinished: (_) => setState(() => isLoading = false),
         ),
-      )
-      ..loadRequest(Uri.parse(_urls[_currentIndex]));
+      );
+    _checkConnectionAndLoad();
+
+    // ✅ Version 5.x compatibility
+    Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      _checkConnectionAndLoad();
+    });
   }
 
-  void _onTabTapped(int index) {
+  Future<void> _checkConnectionAndLoad() async {
+    var connectivityResult = await Connectivity().checkConnectivity();
+    bool connected = connectivityResult != ConnectivityResult.none;
     setState(() {
-      _currentIndex = index;
-      isLoading = true;
+      hasConnection = connected;
+      isLoading = connected;
     });
-    _controller.loadRequest(Uri.parse(_urls[index]));
+    if (connected) {
+      _controller.loadRequest(Uri.parse(_urls[_currentIndex]));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          SafeArea(child: WebViewWidget(controller: _controller)),
-          if (isLoading)
-            Center(child: CircularProgressIndicator(color: Colors.red)),
-        ],
-      ),
+      body: hasConnection
+          ? Stack(
+              children: [
+                SafeArea(child: WebViewWidget(controller: _controller)),
+                if (isLoading)
+                  Center(child: CircularProgressIndicator(color: Colors.red)),
+              ],
+            )
+          : Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off, size: 80, color: Colors.grey),
+                  SizedBox(height: 20),
+                  Text(
+                    'No Internet Connection',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  ElevatedButton(
+                    onPressed: _checkConnectionAndLoad,
+                    child: Text("Retry"),
+                  ),
+                ],
+              ),
+            ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.red,
+        selectedItemColor: const Color.fromARGB(255, 255, 0, 0),
         unselectedItemColor: Colors.grey,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          if (hasConnection) {
+            _controller.loadRequest(Uri.parse(_urls[index]));
+          } else {
+            _checkConnectionAndLoad();
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.track_changes),
+            icon: Icon(Icons.location_on),
             label: 'Tracking',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.casino), label: 'Spin'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.miscellaneous_services),
+            icon: Icon(Icons.settings),
             label: 'Services',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Account'),
