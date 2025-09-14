@@ -1,4 +1,4 @@
-package com.example.winelay
+package com.dynamixwave.winelay
 
 import io.flutter.embedding.android.FlutterActivity
 
